@@ -6,7 +6,7 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <title>Hareket Takip · Yapay Zeka</title>
+  <title>Poz Eşleştirme Oyunu</title>
   <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Barlow+Condensed:wght@300;500;700;900&display=swap" rel="stylesheet" />
   <style>
     :root {
@@ -41,7 +41,7 @@
     .subtitle { font-size: 8px; color: var(--text-dim); letter-spacing: 2px; display: block; margin-top: 2px;}
     .header-stats { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
     .stat-pill { background: var(--bg3); border: 1px solid var(--border); padding: 4px 10px; font-size: 9px; letter-spacing: 1px; white-space: nowrap; border-radius: 16px; display: flex; align-items: center; gap: 4px; font-weight: 700;}
-    #fps-val { color: var(--yellow); font-size: 13px;}
+    .score-val { color: var(--pink); font-size: 14px; text-shadow: 0 0 8px rgba(255, 64, 129, 0.5); }
     #model-badge { color: var(--text-dim); transition: color 0.4s, border-color 0.4s; }
     #model-badge.ready { color: var(--green); border-color: var(--green); text-shadow: 0 0 6px rgba(105, 255, 71, 0.5); }
     #model-badge.error { color: var(--red); border-color: var(--red); }
@@ -62,9 +62,6 @@
     .cam-flip-btn.visible { display: flex; } .cam-flip-btn:active { transform: scale(0.9) rotate(180deg); background: rgba(0, 229, 204, 0.25); }
     @media (min-width: 861px) { .cam-flip-btn { display: none !important; } }
     
-    .cam-label { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); z-index: 15; font-size: 9px; letter-spacing: 2px; color: var(--teal-dim); background: rgba(5, 10, 14, 0.7); padding: 4px 10px; pointer-events: none; display: none; border-radius: 4px; font-weight: 700; }
-    .cam-label.visible { display: block; }
-    
     .placeholder { position: absolute; inset: 0; z-index: 3; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; transition: opacity 0.5s; background: var(--bg2); }
     .placeholder.hidden { opacity: 0; pointer-events: none; }
     .ph-icon { font-size: 40px; color: var(--border); animation: pulse 2s ease-in-out infinite; }
@@ -75,7 +72,6 @@
     .btn { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 12px 24px; border: none; cursor: pointer; font-family: 'Space Mono', monospace; font-size: 11px; letter-spacing: 1px; font-weight: 700; transition: all 0.2s; border-radius: 8px; user-select: none; }
     .btn:active { transform: scale(0.97); }
     .btn-reset { background: transparent; color: var(--text-dim); border: 1px solid var(--border); } .btn-reset:hover { border-color: var(--teal-dim); color: var(--teal); }
-    .btn-shot { background: var(--bg3); color: var(--text-dim); border: 1px solid var(--border); } .btn-shot:hover { border-color: var(--teal-dim); color: var(--teal); }
 
     /* ÜÇ PANEL GÖRÜNÜMÜ */
     .triple-view-toggle { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 8px 0; flex-shrink: 0; }
@@ -100,14 +96,14 @@
 
   <header>
     <div class="logo-area">
-      <span class="logo-icon">👁️</span>
+      <span class="logo-icon">🧗‍♂️</span>
       <div>
-        <h1>HAREKET TAKİP SİSTEMİ</h1>
-        <span class="subtitle">Yapay zeka yörünge ve iskelet analizi</span>
+        <h1>POZ EŞLEŞTİRME OYUNU</h1>
+        <span class="subtitle">Yapay zeka ile şekle gir! ("Hole in the Wall")</span>
       </div>
     </div>
     <div class="header-stats">
-      <div class="stat-pill">FPS <span id="fps-val">0</span></div>
+      <div class="stat-pill">SKOR: <span class="score-val" id="score-val">0</span></div>
       <div class="stat-pill" id="model-badge">● YÜKLENİYOR</div>
     </div>
   </header>
@@ -122,7 +118,7 @@
     <div class="triple-panels" id="triplePanels">
       <div class="tp-panel raw">
         <canvas id="tp_raw"></canvas>
-        <div class="tp-label">📷 HAM GÖRÜNTÜ</div>
+        <div class="tp-label">📷 OYUN EKRANI</div>
       </div>
       <div class="tp-panel skeleton">
         <canvas id="tp_skeleton"></canvas>
@@ -140,7 +136,6 @@
         <canvas id="output_canvas"></canvas>
         <div class="grid-overlay"></div>
         <button class="cam-flip-btn" id="btnFlip" title="Kamerayı Çevir">⟳</button>
-        <div class="cam-label" id="camLabel">ÖN KAMERA</div>
         <div class="placeholder hidden" id="placeholder">
           <div class="ph-icon">📷</div>
           <p>Kamera başlatılıyor...</p>
@@ -148,8 +143,7 @@
       </div>
       <div id="noCamWarn" style="display:none;font-size:10px;color:var(--yellow);padding:6px 10px;background:rgba(255,214,0,.08);border:1px solid rgba(255,214,0,.2);border-radius:4px; text-align: center;">⚠ Arka kamera bulunamadı, ön kamera kullanılıyor.</div>
       <div class="cam-controls">
-        <button class="btn btn-reset" id="btnReset">🧹 İZLERİ TEMİZLE</button>
-        <button class="btn btn-shot" id="btnShot">📸 EKRAN GÖRÜNTÜSÜ</button>
+        <button class="btn btn-reset" id="btnReset">🧹 SIFIRLA VE YENİDEN BAŞLA</button>
       </div>
     </div>
   </div>
@@ -167,27 +161,99 @@ const video = document.getElementById("webcam");
 const canvas = document.getElementById("output_canvas");
 const ctx = canvas.getContext("2d");
 const btnFlip = document.getElementById("btnFlip");
-const btnShot = document.getElementById("btnShot");
 const btnReset = document.getElementById("btnReset");
 const placeholder = document.getElementById("placeholder");
 const modelBadge = document.getElementById("model-badge");
-const fpsVal = document.getElementById("fps-val");
+const scoreVal = document.getElementById("score-val");
 const canvasWrap = document.getElementById("canvasWrap");
-const camLabel = document.getElementById("camLabel");
 const noCamWarn = document.getElementById("noCamWarn");
 
 let drawUtils;
 let poseLM;
 let running = false;
 let lastTime = -1;
-let fpsCnt = 0;
-let fpsT = performance.now();
 let currentFacing = "user";
 let hasMultipleCams = false;
 
-// Hareket İzi (Trajectory) Geçmişi
+// OYUN STATE DEĞİŞKENLERİ
+let gameScore = 0;
+let currentPoseIdx = 0;
+let matchHoldFrames = 0;
+const REQUIRED_HOLD_FRAMES = 15; // Pozu koruma süresi
+let showSuccessText = 0; // Başarılı yazısı efekti için
 let poseHistory = [];
-const maxHistory = 30; // Çizginin uzunluğu (Ortalama 30 kare = 1 saniye)
+const maxHistory = 30; // Çizgi izi uzunluğu
+
+// OYUN POZLARI VERİTABANI (Hedef Açılar)
+const TARGET_POSES = [
+  {
+    name: "T-POZU (Kollar Yana)",
+    angles: { LShoulder: 90, RShoulder: 90, LElbow: 180, RElbow: 180 }
+  },
+  {
+    name: "Y-POZU (Kollar Havaya)",
+    angles: { LShoulder: 160, RShoulder: 160, LElbow: 180, RElbow: 180 }
+  },
+  {
+    name: "TURNA (Tek Ayak)",
+    angles: { LShoulder: 90, RShoulder: 90, LKnee: 90, RKnee: 180 }
+  },
+  {
+    name: "YILDIZ (Açık Poz)",
+    angles: { LShoulder: 45, RShoulder: 45, LHip: 140, RHip: 140, LKnee: 180, RKnee: 180 }
+  },
+  {
+    name: "DİNLENME (Kollar Aşağı)",
+    angles: { LShoulder: 15, RShoulder: 15, LElbow: 180, RElbow: 180, LKnee: 180, RKnee: 180 }
+  }
+];
+
+// ── GEOMETRİ VE MATEMATİK ────────────────────────────────────────────────────
+function angle(A, B, C) {
+  if(!A || !B || !C || A.visibility < 0.3 || B.visibility < 0.3 || C.visibility < 0.3) return null;
+  const bax = A.x - B.x, bay = A.y - B.y;
+  const bcx = C.x - B.x, bcy = C.y - B.y;
+  const mag = Math.hypot(bax, bay) * Math.hypot(bcx, bcy);
+  if (!mag) return null;
+  return Math.round(Math.acos(Math.max(-1, Math.min(1, (bax * bcx + bay * bcy) / mag))) * 180 / Math.PI);
+}
+
+// Poza ne kadar yaklaşıldığını hesaplayan fonksiyon (0-100% arası)
+function calculatePoseAccuracy(lm, target) {
+    let current = {
+        LShoulder: angle(lm[23], lm[11], lm[13]),
+        RShoulder: angle(lm[24], lm[12], lm[14]),
+        LElbow: angle(lm[11], lm[13], lm[15]),
+        RElbow: angle(lm[12], lm[14], lm[16]),
+        LHip: angle(lm[11], lm[23], lm[25]),
+        RHip: angle(lm[12], lm[24], lm[26]),
+        LKnee: angle(lm[23], lm[25], lm[27]),
+        RKnee: angle(lm[24], lm[26], lm[28])
+    };
+
+    let totalDiff = 0;
+    let maxDiff = 0;
+    let keysChecked = 0;
+
+    for (let key in target.angles) {
+        if (current[key] !== null) {
+            let diff = Math.abs(current[key] - target.angles[key]);
+            diff = Math.min(diff, 90); // Maksimum 90 derece hata puanlanır
+            totalDiff += diff;
+            maxDiff += 90;
+            keysChecked++;
+        } else {
+            // Kamera organı göremiyorsa tam hata cezası
+            totalDiff += 90;
+            maxDiff += 90;
+        }
+    }
+
+    if (maxDiff === 0) return 0;
+    let accuracy = 100 - ((totalDiff / maxDiff) * 100);
+    return Math.max(0, Math.round(accuracy));
+}
+
 
 // ── KAMERA ───────────────────────────────────────────────────────────────────
 async function checkCameras() {
@@ -202,7 +268,7 @@ async function startCamera(facing = "user") {
   video.srcObject?.getTracks().forEach(t => t.stop());
   video.srcObject = null;
   noCamWarn.style.display = "none";
-  poseHistory = []; // Kamera değişince izleri sıfırla
+  poseHistory = []; 
   const isBack = facing === "environment";
   const constraints = {
     video: {
@@ -238,8 +304,6 @@ function updateMirror() {
   video.classList.toggle("mirror", isFront);
   canvas.classList.remove("mirror");
   canvasWrap.classList.toggle("back-cam", !isFront);
-  camLabel.textContent = isFront ? "ÖN KAMERA" : "ARKA KAMERA";
-  camLabel.classList.add("visible");
 }
 
 // ── MODELS ───────────────────────────────────────────────────────────────────
@@ -261,13 +325,11 @@ async function setupModels() {
 }
 
 // ── ÇİZİM FONKSİYONLARI ──────────────────────────────────────────────────────
-// Yörünge (Hareket İzi Çizgisi) Çizim Fonksiyonu
 function drawTrajectory(ctxTarget, history, currentLm, W, H, mirror) {
   if (history.length < 1) return;
   ctxTarget.save();
   if (mirror) { ctxTarget.translate(W, 0); ctxTarget.scale(-1, 1); }
 
-  // İzi takip edilecek kilit eklemler: Eller, Kalçalar, Ayak Bilekleri
   const trackedIndices = [15, 16, 23, 24, 27, 28]; 
   ctxTarget.lineWidth = 4;
   ctxTarget.lineCap = "round";
@@ -282,16 +344,13 @@ function drawTrajectory(ctxTarget, history, currentLm, W, H, mirror) {
     for (let i = 1; i < allFrames.length; i++) {
       const p1 = allFrames[i-1][idx];
       const p2 = allFrames[i][idx];
-      
       if (!p1 || !p2 || p1.visibility < 0.3 || p2.visibility < 0.3) continue;
 
       const alpha = (i / allFrames.length); 
-      
       ctxTarget.beginPath();
       ctxTarget.strokeStyle = `rgba(${colorRGB}, ${alpha})`;
       ctxTarget.shadowColor = `rgba(${colorRGB}, ${alpha})`;
       ctxTarget.shadowBlur = 6 * alpha;
-      
       ctxTarget.moveTo(p1.x * W, p1.y * H);
       ctxTarget.lineTo(p2.x * W, p2.y * H);
       ctxTarget.stroke();
@@ -300,7 +359,6 @@ function drawTrajectory(ctxTarget, history, currentLm, W, H, mirror) {
   ctxTarget.restore();
 }
 
-// Gelişmiş İskelet Çizimi (Renkli)
 function drawSkeletonAdvanced(ctxTarget, landmarks, W, H, mirror, isCombined = false) {
   ctxTarget.save();
   if (mirror) { ctxTarget.translate(W, 0); ctxTarget.scale(-1, 1); }
@@ -345,16 +403,66 @@ function drawSkeletonAdvanced(ctxTarget, landmarks, W, H, mirror, isCombined = f
   ctxTarget.restore();
 }
 
+// OYUN ARAYÜZÜNÜ ÇİZ
+function drawGameUI(ctxTarget, W, H, accuracy) {
+  ctxTarget.save();
+
+  // Hedef Poz Arka Planı
+  ctxTarget.fillStyle = "rgba(5, 10, 14, 0.85)";
+  ctxTarget.beginPath();
+  ctxTarget.roundRect(20, 20, 260, 80, 8);
+  ctxTarget.fill();
+  ctxTarget.strokeStyle = "rgba(0, 229, 204, 0.5)";
+  ctxTarget.lineWidth = 1;
+  ctxTarget.stroke();
+
+  // Hedef Poz Adı
+  ctxTarget.fillStyle = "#00e5cc";
+  ctxTarget.font = "bold 20px 'Barlow Condensed', sans-serif";
+  ctxTarget.textAlign = "left";
+  ctxTarget.fillText("HEDEF: " + TARGET_POSES[currentPoseIdx].name, 35, 48);
+
+  // Doğruluk Çubuğu Arka Plan
+  ctxTarget.fillStyle = "#1a3040";
+  ctxTarget.beginPath();
+  ctxTarget.roundRect(35, 65, 230, 14, 7);
+  ctxTarget.fill();
+
+  // Eşleşme Oranı Rengi Belirleme
+  let barColor = "#ff1744"; // Kırmızı
+  if(accuracy > 85) barColor = "#69ff47"; // Yeşil (Başarılı)
+  else if(accuracy > 50) barColor = "#ffd600"; // Sarı (Yaklaşıyor)
+
+  // Doğruluk Çubuğu Doluluk
+  ctxTarget.fillStyle = barColor;
+  ctxTarget.shadowColor = barColor;
+  ctxTarget.shadowBlur = accuracy > 85 ? 10 : 0;
+  ctxTarget.beginPath();
+  ctxTarget.roundRect(35, 65, (accuracy / 100) * 230, 14, 7);
+  ctxTarget.fill();
+  ctxTarget.shadowBlur = 0;
+
+  // Başarı Efekti (Ekranda Büyüyen Yazı)
+  if (showSuccessText > 0) {
+      ctxTarget.fillStyle = "#69ff47";
+      ctxTarget.font = "bold 50px 'Barlow Condensed', sans-serif";
+      ctxTarget.textAlign = "center";
+      ctxTarget.shadowColor = "#69ff47";
+      ctxTarget.shadowBlur = 20;
+      ctxTarget.fillText("HARİKA!", W / 2, H / 2);
+      showSuccessText--;
+  }
+
+  ctxTarget.restore();
+}
+
 // ── MAIN LOOP ────────────────────────────────────────────────────────────────
 function predict() {
   if (!running) return;
-  fpsCnt++;
   const now = performance.now();
-  if (now - fpsT >= 500) { fpsVal.textContent = Math.round(fpsCnt * 1000 / (now - fpsT)); fpsCnt = 0; fpsT = now; }
 
   if (lastTime !== video.currentTime) {
     lastTime = video.currentTime;
-    // Canvas boyutunu video boyutuna eşitle (aspect ratio korumak için)
     if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) { 
         canvas.width = video.videoWidth; 
         canvas.height = video.videoHeight; 
@@ -366,6 +474,8 @@ function predict() {
     const pR = poseLM.detectForVideo(video, now);
     const pLMs = pR.landmarks ?? [];
 
+    let accuracy = 0;
+
     if (pLMs.length > 0) {
       const lm = pLMs[0];
       
@@ -373,15 +483,33 @@ function predict() {
       poseHistory.push(lm);
       if (poseHistory.length > maxHistory) poseHistory.shift();
 
+      // OYUN MATEMATİĞİ (Açı Kontrolü)
+      accuracy = calculatePoseAccuracy(lm, TARGET_POSES[currentPoseIdx]);
+
+      if (accuracy > 85) {
+          matchHoldFrames++;
+          if (matchHoldFrames >= REQUIRED_HOLD_FRAMES) {
+              // DUVARI GEÇTİ!
+              gameScore += 100;
+              scoreVal.innerText = gameScore;
+              currentPoseIdx = (currentPoseIdx + 1) % TARGET_POSES.length; // Sonraki poza geç
+              matchHoldFrames = 0;
+              showSuccessText = 30; // 30 kare boyunca "Harika!" yazısı
+          }
+      } else {
+          matchHoldFrames = Math.max(0, matchHoldFrames - 2); // Eşleşme bozulursa süreyi hızla sıfırla
+      }
+
       // Tekli Ekran Çizimleri
       if (!tripleViewActive) {
           drawTrajectory(ctx, poseHistory, lm, canvas.width, canvas.height, currentFacing === "user");
-          drawSkeletonAdvanced(ctx, lm, canvas.width, canvas.height, currentFacing === "user", true); // true = kombine tarzı çiz
+          drawSkeletonAdvanced(ctx, lm, canvas.width, canvas.height, currentFacing === "user", true); 
+          drawGameUI(ctx, canvas.width, canvas.height, accuracy);
       }
       
-      drawTriplePanels(pLMs);
+      drawTriplePanels(pLMs, accuracy);
     } else {
-      drawTriplePanels(null);
+      drawTriplePanels(null, 0);
     }
     ctx.restore();
   }
@@ -397,24 +525,12 @@ btnFlip.addEventListener("click", async () => {
   try { await startCamera(currentFacing); } catch (e) {}
 });
 
-btnShot.addEventListener("click", () => {
-  const tmp = document.createElement("canvas");
-  tmp.width = canvas.width; tmp.height = canvas.height;
-  const t = tmp.getContext("2d");
-  if (currentFacing === "user") { 
-    t.save(); t.translate(tmp.width, 0); t.scale(-1, 1);
-    t.drawImage(video, 0, 0, tmp.width, tmp.height); t.restore();
-    t.save(); t.translate(tmp.width, 0); t.scale(-1, 1);
-    t.drawImage(canvas, 0, 0); t.restore(); 
-  } else { t.drawImage(video, 0, 0, tmp.width, tmp.height); t.drawImage(canvas, 0, 0); }
-  const a = document.createElement("a");
-  a.download = `hareket-takip-${Date.now()}.png`;
-  a.href = tmp.toDataURL("image/png");
-  a.click();
-});
-
 btnReset.addEventListener("click", () => {
   poseHistory = [];
+  gameScore = 0;
+  scoreVal.innerText = "0";
+  currentPoseIdx = 0;
+  matchHoldFrames = 0;
 });
 
 // ── ÜÇ PANEL GÖRÜNÜMÜ ────────────────────────────────────────────────────────
@@ -445,19 +561,20 @@ function syncPanelSize(c) {
   }
 }
 
-function drawTriplePanels(landmarks) {
+function drawTriplePanels(landmarks, accuracy) {
   if (!tripleViewActive || !running || video.videoWidth === 0) return;
   syncPanelSize(tpRaw); syncPanelSize(tpSkeleton); syncPanelSize(tpCombined);
   const W = video.videoWidth, H = video.videoHeight;
   const mirror = currentFacing === "user";
 
-  // ── Panel 1: Ham kamera görüntüsü ──
+  // ── Panel 1: Oyun Ekranı ──
   ctxRaw.save();
   if (mirror) { ctxRaw.translate(W, 0); ctxRaw.scale(-1, 1); }
   ctxRaw.drawImage(video, 0, 0, W, H);
   ctxRaw.restore();
+  drawGameUI(ctxRaw, W, H, accuracy); // Oyun arayüzünü bu ekrana çiz
 
-  // ── Panel 2: Siyah arka plan üzerinde sadece iskelet ve izler ──
+  // ── Panel 2: Sadece İskelet ve İzler ──
   ctxSkel.fillStyle = "#050a0e";
   ctxSkel.fillRect(0, 0, W, H);
   ctxSkel.strokeStyle = "rgba(0,229,204,0.04)"; ctxSkel.lineWidth = 1;
@@ -470,7 +587,7 @@ function drawTriplePanels(landmarks) {
     drawSkeletonAdvanced(ctxSkel, landmarks[0], W, H, mirror, false);
   }
 
-  // ── Panel 3: Birleşik (kamera + iskelet + izler) ──
+  // ── Panel 3: Birleşik Görünüm ──
   ctxComb.save();
   if (mirror) { ctxComb.translate(W, 0); ctxComb.scale(-1, 1); }
   ctxComb.drawImage(video, 0, 0, W, H);
@@ -513,4 +630,3 @@ window.addEventListener("orientationchange", () => {
 </script>
 </body>
 </html>
-
