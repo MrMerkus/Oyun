@@ -6,7 +6,7 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <title>Duvarı Geç Oyunu v3 (120 Bölüm)</title>
+  <title>Duvarı Geç Oyunu (Kalıp Modu) v4</title>
   <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Barlow+Condensed:wght@300;500;700;900&display=swap" rel="stylesheet" />
   <style>
     :root {
@@ -63,15 +63,15 @@
     .tp-panel canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
     .tp-label { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); font-size: 9px; font-weight: 700; letter-spacing: 2px; background: rgba(5,10,14,0.85); padding: 5px 12px; border-radius: 6px; z-index: 5; white-space: nowrap; border: 1px solid var(--border); pointer-events: none; }
     
-    /* DEVASA REFERANS PANELİ */
-    .ref-panel {
+    /* DEVASA OYUN PANELİ */
+    .game-panel {
       grid-column: 1;
       grid-row: 1 / span 2;
-      border: 3px solid var(--pink);
-      box-shadow: 0 0 35px rgba(255, 64, 129, 0.25);
+      border: 3px solid var(--teal);
+      box-shadow: 0 0 35px rgba(0, 229, 204, 0.15);
+      background-color: #050a0e;
     }
-    .ref-panel canvas { object-fit: contain; background-color: #050a0e; }
-    .ref-panel .tp-label { color: var(--pink); border-color: var(--pink); font-size: 14px; padding: 10px 20px; bottom: 15px;}
+    .game-panel .tp-label { color: var(--teal); border-color: var(--teal); font-size: 14px; padding: 10px 20px; bottom: 15px;}
 
     .raw-panel .tp-label { color: var(--yellow); }
     .skel-panel .tp-label { color: var(--green); }
@@ -93,7 +93,7 @@
       <span class="logo-icon">🧱</span>
       <div>
         <h1>DUVARI GEÇ!</h1>
-        <span class="subtitle">120 farklı dinamik şekil kombinasyonu</span>
+        <span class="subtitle">Sana doğru yaklaşan duvar kalıbının içine sığ!</span>
       </div>
     </div>
     <div class="header-stats">
@@ -103,9 +103,9 @@
   </header>
 
   <div class="three-panels">
-    <div class="tp-panel ref-panel">
-      <canvas id="tp_reference"></canvas>
-      <div class="tp-label">🎯 DUVAR BOŞLUĞU (VÜCUDUNU BURAYA SIĞDIR)</div>
+    <div class="tp-panel game-panel">
+      <canvas id="tp_game"></canvas>
+      <div class="tp-label">🎯 DUVAR BOŞLUĞUNA SIĞMAYA ÇALIŞ</div>
     </div>
 
     <div class="tp-panel raw-panel">
@@ -122,7 +122,7 @@
   <div class="cam-controls">
     <video id="webcam" autoplay playsinline></video>
     <button class="btn btn-reset" id="btnFlip">⟳ KAMERAYI ÇEVİR</button>
-    <button class="btn btn-reset" id="btnReset">🧹 SKORU SIFIRLA & KARIŞTIR</button>
+    <button class="btn btn-reset" id="btnReset">🧹 SKORU SIFIRLA & BÖLÜMÜ DEĞİŞTİR</button>
   </div>
 
 <script type="module">
@@ -135,48 +135,53 @@ const btnFlip = document.getElementById("btnFlip");
 const btnReset = document.getElementById("btnReset");
 
 const ctxs = {
-  ref: document.getElementById("tp_reference").getContext("2d"),
+  game: document.getElementById("tp_game").getContext("2d"),
   raw: document.getElementById("tp_raw").getContext("2d"),
   skel: document.getElementById("tp_skeleton").getContext("2d")
 };
 
 let poseLM, running = false, lastTime = -1, currentFacing = "user";
-let gameScore = 0, currentPoseIdx = 0, matchHoldFrames = 0, showSuccessText = 0;
-const REQUIRED_HOLD_FRAMES = 15; 
-let poseHistory = [], maxHistory = 30;
+let gameScore = 0, currentPoseIdx = 0;
+let wallProgress = 0; // 0'dan 1'e doğru duvar yaklaşma yüzdesi
+let showSuccessText = 0, showFailText = 0;
 
-// ── 120 POZLU DİNAMİK ÜRETİCİ (PROCEDURAL GENERATOR) ──
+// Off-screen canvas (Duvarı ve içindeki deliği çizmek için)
+const wallCanvas = document.createElement('canvas');
+const wallCtx = wallCanvas.getContext('2d');
+
+// ── 120 SADE VE DOĞAL POZ ÜRETİCİ ──
 const UPPER_POSES = [
-  { n: "T-KOL", a: { LShoulder: 90, RShoulder: 90, LElbow: 180, RElbow: 180 } },
-  { n: "Y-KOL", a: { LShoulder: 150, RShoulder: 150, LElbow: 180, RElbow: 180 } },
-  { n: "A-KOL", a: { LShoulder: 30, RShoulder: 30, LElbow: 180, RElbow: 180 } },
-  { n: "U-KOL", a: { LShoulder: 90, RShoulder: 90, LElbow: 90, RElbow: 90 } },
-  { n: "KASLI", a: { LShoulder: 90, RShoulder: 90, LElbow: 45, RElbow: 45 } },
-  { n: "SOL YUKARI", a: { LShoulder: 160, RShoulder: 20, LElbow: 180, RElbow: 180 } },
-  { n: "SAĞ YUKARI", a: { LShoulder: 20, RShoulder: 160, LElbow: 180, RElbow: 180 } },
-  { n: "ZİGZAG", a: { LShoulder: 135, RShoulder: 45, LElbow: 90, RElbow: 90 } },
-  { n: "ÇAPRAZ", a: { LShoulder: 135, RShoulder: 135, LElbow: 45, RElbow: 45 } },
-  { n: "DİNLENME", a: { LShoulder: 10, RShoulder: 10, LElbow: 180, RElbow: 180 } },
-  { n: "L-KOL", a: { LShoulder: 90, RShoulder: 10, LElbow: 180, RElbow: 180 } },
-  { n: "TERS L", a: { LShoulder: 10, RShoulder: 90, LElbow: 180, RElbow: 180 } }
+  { n: "Kollar Yanda", a: { LShoulder: 90, RShoulder: 90, LElbow: 180, RElbow: 180 } },
+  { n: "Kollar Havada", a: { LShoulder: 160, RShoulder: 160, LElbow: 180, RElbow: 180 } },
+  { n: "V-Şekli", a: { LShoulder: 135, RShoulder: 135, LElbow: 180, RElbow: 180 } },
+  { n: "A-Şekli", a: { LShoulder: 40, RShoulder: 40, LElbow: 180, RElbow: 180 } },
+  { n: "Eller Belde", a: { LShoulder: 45, RShoulder: 45, LElbow: 90, RElbow: 90 } },
+  { n: "Kas Gösterisi", a: { LShoulder: 90, RShoulder: 90, LElbow: 90, RElbow: 90 } },
+  { n: "Sol Havada", a: { LShoulder: 160, RShoulder: 20, LElbow: 180, RElbow: 180 } },
+  { n: "Sağ Havada", a: { LShoulder: 20, RShoulder: 160, LElbow: 180, RElbow: 180 } },
+  { n: "Sol Yanda", a: { LShoulder: 90, RShoulder: 20, LElbow: 180, RElbow: 180 } },
+  { n: "Sağ Yanda", a: { LShoulder: 20, RShoulder: 90, LElbow: 180, RElbow: 180 } },
+  { n: "Eller Başta", a: { LShoulder: 135, RShoulder: 135, LElbow: 45, RElbow: 45 } },
+  { n: "Teslim Ol", a: { LShoulder: 135, RShoulder: 135, LElbow: 90, RElbow: 90 } },
+  { n: "Dinlenme", a: { LShoulder: 10, RShoulder: 10, LElbow: 180, RElbow: 180 } },
+  { n: "Sol U, Sağ V", a: { LShoulder: 90, RShoulder: 135, LElbow: 90, RElbow: 180 } },
+  { n: "Sol V, Sağ U", a: { LShoulder: 135, RShoulder: 90, LElbow: 180, RElbow: 90 } }
 ];
 
 const LOWER_POSES = [
-  { n: "DİK DURUŞ", a: { LHip: 180, RHip: 180, LKnee: 180, RKnee: 180 } },
-  { n: "AÇIK BACAK", a: { LHip: 150, RHip: 150, LKnee: 180, RKnee: 180 } },
-  { n: "SQUAT", a: { LHip: 110, RHip: 110, LKnee: 110, RKnee: 110 } },
-  { n: "GENİŞ SQUAT", a: { LHip: 130, RHip: 130, LKnee: 90, RKnee: 90 } },
-  { n: "SOL TURNA", a: { LHip: 90, RHip: 180, LKnee: 90, RKnee: 180 } },
-  { n: "SAĞ TURNA", a: { LHip: 180, RHip: 90, LKnee: 180, RKnee: 90 } },
-  { n: "SOL YAN TEKME", a: { LHip: 120, RHip: 180, LKnee: 180, RKnee: 180 } },
-  { n: "SAĞ YAN TEKME", a: { LHip: 180, RHip: 120, LKnee: 180, RKnee: 180 } },
-  { n: "AĞAÇ POZU SOL", a: { LHip: 135, RHip: 180, LKnee: 45, RKnee: 180 } },
-  { n: "AĞAÇ POZU SAĞ", a: { LHip: 180, RHip: 135, LKnee: 180, RKnee: 45 } }
+  { n: "Düz Duruş", a: { LHip: 180, RHip: 180, LKnee: 180, RKnee: 180 } },
+  { n: "Bacaklar Açık", a: { LHip: 160, RHip: 160, LKnee: 180, RKnee: 180 } },
+  { n: "Bacaklar Geniş", a: { LHip: 145, RHip: 145, LKnee: 180, RKnee: 180 } },
+  { n: "Hafif Çömelme", a: { LHip: 150, RHip: 150, LKnee: 150, RKnee: 150 } },
+  { n: "Sola Adım", a: { LHip: 150, RHip: 180, LKnee: 180, RKnee: 180 } },
+  { n: "Sağa Adım", a: { LHip: 180, RHip: 150, LKnee: 180, RKnee: 180 } },
+  { n: "Sol Diz Yukarı", a: { LHip: 100, RHip: 180, LKnee: 100, RKnee: 180 } },
+  { n: "Sağ Diz Yukarı", a: { LHip: 180, RHip: 100, LKnee: 180, RKnee: 100 } }
 ];
 
 let TARGET_POSES = [];
 
-// Matematiksel olarak duvar koordinatlarını hesaplayan algoritma
+// Kalıp boşluğunu oranlı çizebilmek için
 function generateRefPoints(angles) {
     const pts = [];
     const pushP = (id, x, y) => pts.push({id, x, y});
@@ -185,34 +190,35 @@ function generateRefPoints(angles) {
     pushP(23, 0.45, 0.6); pushP(24, 0.55, 0.6); // Kalçalar
     
     const d2r = Math.PI / 180;
+    const A = 1.33; // Ortalama ekran en-boy oranı dengesi (kolların fazla uzamaması için)
     
-    // Sol Kol
-    let tLA = Math.PI/2 - (angles.LShoulder * d2r);
-    let x13 = 0.4 + Math.cos(tLA)*0.15, y13 = 0.3 + Math.sin(tLA)*0.15;
+    // Sol Kol (Ekranda sol)
+    let tLA = Math.PI/2 + (angles.LShoulder * d2r);
+    let x13 = 0.4 + (Math.cos(tLA)*0.15)/A, y13 = 0.3 + Math.sin(tLA)*0.15;
     pushP(13, x13, y13);
-    let tLA_L = tLA - ((180 - angles.LElbow) * d2r);
-    pushP(15, x13 + Math.cos(tLA_L)*0.15, y13 + Math.sin(tLA_L)*0.15);
+    let tLA_L = tLA + ((180 - angles.LElbow) * d2r);
+    pushP(15, x13 + (Math.cos(tLA_L)*0.15)/A, y13 + Math.sin(tLA_L)*0.15);
     
-    // Sağ Kol
-    let tRA = Math.PI/2 + (angles.RShoulder * d2r);
-    let x14 = 0.6 + Math.cos(tRA)*0.15, y14 = 0.3 + Math.sin(tRA)*0.15;
+    // Sağ Kol (Ekranda sağ)
+    let tRA = Math.PI/2 - (angles.RShoulder * d2r);
+    let x14 = 0.6 + (Math.cos(tRA)*0.15)/A, y14 = 0.3 + Math.sin(tRA)*0.15;
     pushP(14, x14, y14);
-    let tRA_L = tRA + ((180 - angles.RElbow) * d2r);
-    pushP(16, x14 + Math.cos(tRA_L)*0.15, y14 + Math.sin(tRA_L)*0.15);
+    let tRA_L = tRA - ((180 - angles.RElbow) * d2r);
+    pushP(16, x14 + (Math.cos(tRA_L)*0.15)/A, y14 + Math.sin(tRA_L)*0.15);
     
-    // Sol Bacak
-    let tLL = Math.PI/2 - ((180 - angles.LHip) * d2r);
-    let x25 = 0.45 + Math.cos(tLL)*0.2, y25 = 0.6 + Math.sin(tLL)*0.2;
+    // Sol Bacak (Ekranda sol)
+    let tLL = Math.PI/2 + ((180 - angles.LHip) * d2r);
+    let x25 = 0.45 + (Math.cos(tLL)*0.2)/A, y25 = 0.6 + Math.sin(tLL)*0.2;
     pushP(25, x25, y25);
     let tLL_L = tLL - ((180 - angles.LKnee) * d2r);
-    pushP(27, x25 + Math.cos(tLL_L)*0.2, y25 + Math.sin(tLL_L)*0.2);
+    pushP(27, x25 + (Math.cos(tLL_L)*0.2)/A, y25 + Math.sin(tLL_L)*0.2);
     
-    // Sağ Bacak
-    let tRL = Math.PI/2 + ((180 - angles.RHip) * d2r);
-    let x26 = 0.55 + Math.cos(tRL)*0.2, y26 = 0.6 + Math.sin(tRL)*0.2;
+    // Sağ Bacak (Ekranda sağ)
+    let tRL = Math.PI/2 - ((180 - angles.RHip) * d2r);
+    let x26 = 0.55 + (Math.cos(tRL)*0.2)/A, y26 = 0.6 + Math.sin(tRL)*0.2;
     pushP(26, x26, y26);
     let tRL_L = tRL + ((180 - angles.RKnee) * d2r);
-    pushP(28, x26 + Math.cos(tRL_L)*0.2, y26 + Math.sin(tRL_L)*0.2);
+    pushP(28, x26 + (Math.cos(tRL_L)*0.2)/A, y26 + Math.sin(tRL_L)*0.2);
     
     return pts;
 }
@@ -221,15 +227,15 @@ function buildPoseDatabase() {
   TARGET_POSES = [];
   UPPER_POSES.forEach(u => {
     LOWER_POSES.forEach(l => {
-      const combinedAngles = { ...u.a, ...l.a };
+      let poseName = (u.n === "Dinlenme" && l.n === "Düz Duruş") ? "HAZIR OL" : `${u.n} + ${l.n}`;
       TARGET_POSES.push({
-        name: `${u.n} & ${l.n}`,
-        angles: combinedAngles,
-        refPoints: generateRefPoints(combinedAngles)
+        name: poseName,
+        angles: { ...u.a, ...l.a },
+        refPoints: generateRefPoints({ ...u.a, ...l.a })
       });
     });
   });
-  // Oyunu her seferinde eşsiz kılmak için karıştır (Shuffle)
+  // Oyunu her seferinde farklı başlat
   TARGET_POSES.sort(() => Math.random() - 0.5);
 }
 buildPoseDatabase();
@@ -254,7 +260,7 @@ function calculatePoseAccuracy(lm, target) {
         if (current[key] !== null) {
             totalDiff += Math.min(Math.abs(current[key] - target.angles[key]), 90);
         } else {
-            totalDiff += 90; 
+            totalDiff += 90; // Eklem kamerada yoksa tam ceza
         }
         maxDiff += 90;
     }
@@ -263,8 +269,7 @@ function calculatePoseAccuracy(lm, target) {
 
 async function startCamera(facing = "user") {
   video.srcObject?.getTracks().forEach(t => t.stop());
-  const constraints = { video: { facingMode: { ideal: facing }, width: { ideal: 1280 }, height: { ideal: 720 } } };
-  const stream = await navigator.mediaDevices.getUserMedia(constraints);
+  const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: facing }, width: { ideal: 1280 }, height: { ideal: 720 } } });
   video.srcObject = stream;
   currentFacing = stream.getVideoTracks()[0].getSettings().facingMode || facing;
   video.onloadeddata = () => { video.play(); running = true; predict(); };
@@ -281,29 +286,6 @@ async function init() {
 }
 
 // ── ÇİZİM FONKSİYONLARI ──────────────────────────────────────────────────────
-function drawTrajectory(ctxTarget, history, currentLm, W, H, mirror) {
-  if (history.length < 1) return;
-  ctxTarget.save(); if (mirror) { ctxTarget.translate(W, 0); ctxTarget.scale(-1, 1); }
-  const tracked = [15, 16, 23, 24, 27, 28]; 
-  ctxTarget.lineWidth = 4; ctxTarget.lineCap = "round"; ctxTarget.lineJoin = "round";
-  const allFrames = [...history, currentLm];
-
-  for (const idx of tracked) {
-    const isLeft = [15, 23, 27].includes(idx);
-    const colorRGB = isLeft ? "255, 34, 68" : "51, 153, 255"; 
-    for (let i = 1; i < allFrames.length; i++) {
-      const p1 = allFrames[i-1][idx], p2 = allFrames[i][idx];
-      if (!p1 || !p2 || p1.visibility < 0.3 || p2.visibility < 0.3) continue;
-      const alpha = (i / allFrames.length); 
-      ctxTarget.beginPath();
-      ctxTarget.strokeStyle = `rgba(${colorRGB}, ${alpha})`;
-      ctxTarget.moveTo(p1.x * W, p1.y * H); ctxTarget.lineTo(p2.x * W, p2.y * H);
-      ctxTarget.stroke();
-    }
-  }
-  ctxTarget.restore();
-}
-
 function drawSkeletonAdvanced(ctxTarget, landmarks, W, H, mirror) {
   ctxTarget.save(); if (mirror) { ctxTarget.translate(W, 0); ctxTarget.scale(-1, 1); }
   const leftIdx = new Set([11,13,15,17,19,21,23,25,27,29,31]);
@@ -325,37 +307,97 @@ function drawSkeletonAdvanced(ctxTarget, landmarks, W, H, mirror) {
   ctxTarget.restore();
 }
 
-// 1. DEVASA DUVAR BOŞLUĞUNU ÇİZ
-function drawReferenceBackground(ctxTarget, poseIdx, W, H) {
-  const pose = TARGET_POSES[poseIdx];
-  ctxTarget.clearRect(0, 0, W, H);
-  
-  ctxTarget.strokeStyle = "rgba(255, 64, 129, 0.4)"; 
-  ctxTarget.lineWidth = 40; 
-  ctxTarget.lineCap = "round"; ctxTarget.lineJoin = "round";
-  
-  const pts = pose.refPoints;
-  const getP = (id) => pts.find(p => p.id === id);
-  const drawLine = (id1, id2) => {
-    const p1 = getP(id1), p2 = getP(id2);
-    if(p1 && p2) {
-      ctxTarget.beginPath(); ctxTarget.moveTo(p1.x * W, p1.y * H); ctxTarget.lineTo(p2.x * W, p2.y * H); ctxTarget.stroke();
+// YAKLAŞAN DUVAR KALIBI ÇİZİMİ (Destination-out taktiği ile delik açılır)
+function drawApproachingWall(ctxTarget, pose, W, H, progress, accuracy) {
+    if(wallCanvas.width !== W || wallCanvas.height !== H) {
+        wallCanvas.width = W; wallCanvas.height = H;
     }
-  };
+    wallCtx.clearRect(0,0,W,H);
 
-  drawLine(11, 12); drawLine(23, 24); drawLine(11, 23); drawLine(12, 24);
-  drawLine(11, 13); drawLine(13, 15); drawLine(12, 14); drawLine(14, 16);
-  if(getP(25)) { drawLine(23, 25); drawLine(25, 27); } else { drawLine(23, 27); }
-  if(getP(26)) { drawLine(24, 26); drawLine(26, 28); } else { drawLine(24, 28); }
+    // Duvar 0.3'ten başlayıp 1.2 boyutuna kadar büyüyerek üstünüze gelir
+    const scale = 0.3 + (progress * 0.9);
 
-  pts.forEach(p => {
-    ctxTarget.beginPath(); ctxTarget.arc(p.x * W, p.y * H, 20, 0, Math.PI * 2);
-    ctxTarget.fillStyle = "rgba(255, 64, 129, 0.4)"; ctxTarget.fill();
-  });
+    wallCtx.save();
+    wallCtx.translate(W/2, H/2);
+    wallCtx.scale(scale, scale);
+    wallCtx.translate(-W/2, -H/2);
+
+    // 1. DUVAR GÖVDESİ (Katı Madde)
+    // Şekle uymaya başlarsak duvar hafif yeşil parlar
+    wallCtx.fillStyle = accuracy > 85 ? "rgba(105, 255, 71, 0.9)" : "rgba(150, 180, 220, 0.95)";
+    wallCtx.beginPath();
+    wallCtx.roundRect(W*0.05, H*0.05, W*0.9, H*0.9, 30); // Duvar paneli
+    wallCtx.fill();
+    wallCtx.lineWidth = 8;
+    wallCtx.strokeStyle = accuracy > 85 ? "#69ff47" : "#00e5cc";
+    wallCtx.stroke();
+
+    // 2. DUVARDA DELİK AÇMA (Destination-out)
+    wallCtx.globalCompositeOperation = "destination-out";
+    wallCtx.lineCap = "round";
+    wallCtx.lineJoin = "round";
+    wallCtx.fillStyle = "#000";
+    wallCtx.strokeStyle = "#000";
+
+    const pts = pose.refPoints;
+    const getP = (id) => pts.find(p => p.id === id);
+
+    const drawCutLine = (id1, id2, thick) => {
+        const p1 = getP(id1), p2 = getP(id2);
+        if(p1 && p2) {
+            wallCtx.lineWidth = thick;
+            wallCtx.beginPath();
+            wallCtx.moveTo(p1.x * W, p1.y * H);
+            wallCtx.lineTo(p2.x * W, p2.y * H);
+            wallCtx.stroke();
+        }
+    }
+
+    // Kalıp boşluk kalınlıkları
+    const headR = H * 0.08;
+    const bodyW = W * 0.16;
+    const armW = W * 0.08;
+    const legW = W * 0.10;
+
+    // Gövde Deliği
+    const p11=getP(11), p12=getP(12), p23=getP(23), p24=getP(24);
+    if(p11&&p12&&p23&&p24) {
+        wallCtx.beginPath();
+        wallCtx.moveTo(p11.x*W, p11.y*H); wallCtx.lineTo(p12.x*W, p12.y*H);
+        wallCtx.lineTo(p24.x*W, p24.y*H); wallCtx.lineTo(p23.x*W, p23.y*H);
+        wallCtx.fill();
+    }
+    drawCutLine(11, 23, bodyW); drawCutLine(12, 24, bodyW);
+
+    // Baş Deliği
+    if(p11&&p12) {
+        const mx = (p11.x+p12.x)/2, my = (p11.y+p12.y)/2;
+        wallCtx.beginPath(); wallCtx.arc(mx*W, my*H - headR*1.3, headR, 0, Math.PI*2); wallCtx.fill();
+        wallCtx.lineWidth = bodyW*0.6;
+        wallCtx.beginPath(); wallCtx.moveTo(mx*W, my*H); wallCtx.lineTo(mx*W, my*H - headR*1.3); wallCtx.stroke();
+    }
+
+    // Kol Delikleri
+    drawCutLine(11, 13, armW); drawCutLine(13, 15, armW);
+    drawCutLine(12, 14, armW); drawCutLine(14, 16, armW);
+
+    // Bacak Delikleri
+    if(getP(25)) { drawCutLine(23, 25, legW); drawCutLine(25, 27, legW); } else { drawCutLine(23, 27, legW); }
+    if(getP(26)) { drawCutLine(24, 26, legW); drawCutLine(26, 28, legW); } else { drawCutLine(24, 28, legW); }
+
+    wallCtx.restore();
+
+    // 3. HAZIRLANAN DUVARI EKRANA BAS (Derinlik gölgesi ile)
+    ctxTarget.save();
+    ctxTarget.shadowColor = "rgba(0,0,0,0.8)";
+    ctxTarget.shadowBlur = 40 * scale; // Yaklaştıkça gölge büyür
+    ctxTarget.shadowOffsetY = 15 * scale;
+    ctxTarget.drawImage(wallCanvas, 0, 0);
+    ctxTarget.restore();
 }
 
-// 2. DEVASA ARAYÜZÜ ÇİZ
-function drawReferenceUI(ctxTarget, poseIdx, W, H, accuracy) {
+// OYUN ARAYÜZÜNÜ ÇİZ
+function drawGameUI(ctxTarget, poseIdx, W, H, accuracy) {
   const pose = TARGET_POSES[poseIdx];
   
   ctxTarget.fillStyle = "rgba(5, 10, 14, 0.85)";
@@ -379,13 +421,22 @@ function drawReferenceUI(ctxTarget, poseIdx, W, H, accuracy) {
   ctxTarget.beginPath(); ctxTarget.roundRect(65, 120, (accuracy / 100) * 430, 26, 13); ctxTarget.fill();
   ctxTarget.shadowBlur = 0;
 
+  // Efekt Metinleri
   if (showSuccessText > 0) {
       ctxTarget.fillStyle = "#69ff47";
-      ctxTarget.font = "bold 140px 'Barlow Condensed', sans-serif";
+      ctxTarget.font = "bold 150px 'Barlow Condensed', sans-serif";
       ctxTarget.textAlign = "center";
       ctxTarget.shadowColor = "#69ff47"; ctxTarget.shadowBlur = 40;
       ctxTarget.fillText("GEÇTİN!", W / 2, H / 2);
       showSuccessText--;
+  }
+  if (showFailText > 0) {
+      ctxTarget.fillStyle = "#ff1744";
+      ctxTarget.font = "bold 130px 'Barlow Condensed', sans-serif";
+      ctxTarget.textAlign = "center";
+      ctxTarget.shadowColor = "#ff1744"; ctxTarget.shadowBlur = 40;
+      ctxTarget.fillText("ÇARPILDIN!", W / 2, H / 2);
+      showFailText--;
   }
 }
 
@@ -396,7 +447,7 @@ function predict() {
 
   if (lastTime !== video.currentTime) {
     lastTime = video.currentTime;
-    [ctxs.ref.canvas, ctxs.raw.canvas, ctxs.skel.canvas].forEach(c => {
+    [ctxs.game.canvas, ctxs.raw.canvas, ctxs.skel.canvas].forEach(c => {
       if(c.width !== video.videoWidth || c.height !== video.videoHeight){
         c.width = video.videoWidth; c.height = video.videoHeight;
       }
@@ -412,28 +463,35 @@ function predict() {
 
     if (pLMs.length > 0) {
       const lm = pLMs[0];
-      
-      poseHistory.push(lm);
-      if (poseHistory.length > maxHistory) poseHistory.shift();
-
       accuracy = calculatePoseAccuracy(lm, TARGET_POSES[currentPoseIdx]);
 
-      if (accuracy > 85) {
-          matchHoldFrames++;
-          if (matchHoldFrames >= REQUIRED_HOLD_FRAMES) {
-              gameScore += 100; scoreVal.innerText = gameScore;
-              currentPoseIdx = (currentPoseIdx + 1) % TARGET_POSES.length; 
-              matchHoldFrames = 0; showSuccessText = 30; 
-          }
-      } else {
-          matchHoldFrames = Math.max(0, matchHoldFrames - 2); 
+      // DUVAR YAKLAŞMA MATEMATİĞİ
+      wallProgress += 0.006; // Yaklaşık 3 saniyede duvar üzerinize gelir
+
+      if (accuracy > 85 && wallProgress > 0.65) {
+          // Duvar yakınken doğru pozu verirseniz duvar kırılır/geçilir!
+          gameScore += 100; scoreVal.innerText = gameScore;
+          currentPoseIdx = (currentPoseIdx + 1) % TARGET_POSES.length; 
+          wallProgress = 0; showSuccessText = 40; 
+      } else if (wallProgress >= 1.0) {
+          // Süre doldu, duvar çarptı!
+          currentPoseIdx = (currentPoseIdx + 1) % TARGET_POSES.length; 
+          wallProgress = 0; showFailText = 40;
       }
 
-      // 1. DEVASA EKRAN
-      drawReferenceBackground(ctxs.ref, currentPoseIdx, W, H);
-      drawTrajectory(ctxs.ref, poseHistory, lm, W, H, mirror);
-      drawSkeletonAdvanced(ctxs.ref, lm, W, H, mirror); 
-      drawReferenceUI(ctxs.ref, currentPoseIdx, W, H, accuracy);
+      // 1. DEVASA OYUN EKRANI
+      // Kamerayı arkaya basıyoruz
+      ctxs.game.save(); if(mirror){ ctxs.game.translate(W,0); ctxs.game.scale(-1,1); }
+      ctxs.game.drawImage(video, 0, 0, W, H); ctxs.game.restore();
+      
+      // Kullanıcının iskeletini çiz (İsteğe bağlı, yön bulmayı kolaylaştırır)
+      drawSkeletonAdvanced(ctxs.game, lm, W, H, mirror); 
+      
+      // Yaklaşan Duvar Kalıbını Çiz
+      drawApproachingWall(ctxs.game, TARGET_POSES[currentPoseIdx], W, H, wallProgress, accuracy);
+      
+      // UI'yi En Üste Çiz
+      drawGameUI(ctxs.game, currentPoseIdx, W, H, accuracy);
 
       // 2. SAĞ ÜST: KAMERA
       ctxs.raw.save(); if(mirror){ ctxs.raw.translate(W,0); ctxs.raw.scale(-1,1); }
@@ -444,15 +502,14 @@ function predict() {
       ctxs.skel.strokeStyle = "rgba(0,229,204,0.04)"; ctxs.skel.lineWidth = 1;
       for (let x=0; x<=W; x+=40) { ctxs.skel.beginPath(); ctxs.skel.moveTo(x,0); ctxs.skel.lineTo(x,H); ctxs.skel.stroke(); }
       for (let y=0; y<=H; y+=40) { ctxs.skel.beginPath(); ctxs.skel.moveTo(0,y); ctxs.skel.lineTo(W,y); ctxs.skel.stroke(); }
-      
-      drawTrajectory(ctxs.skel, poseHistory, lm, W, H, mirror);
       drawSkeletonAdvanced(ctxs.skel, lm, W, H, mirror);
 
     } else {
-      drawReferenceBackground(ctxs.ref, currentPoseIdx, W, H);
-      drawReferenceUI(ctxs.ref, currentPoseIdx, W, H, 0);
-      ctxs.raw.clearRect(0,0,W,H);
-      ctxs.skel.clearRect(0,0,W,H);
+      // Kişi yoksa sadece oyunu çizmeye devam et (Duvar gelir ama vuramazsın)
+      ctxs.game.clearRect(0,0,W,H);
+      drawApproachingWall(ctxs.game, TARGET_POSES[currentPoseIdx], W, H, wallProgress, 0);
+      drawGameUI(ctxs.game, currentPoseIdx, W, H, 0);
+      ctxs.raw.clearRect(0,0,W,H); ctxs.skel.clearRect(0,0,W,H);
     }
   }
   requestAnimationFrame(predict);
@@ -460,9 +517,9 @@ function predict() {
 
 btnFlip.onclick = () => startCamera(currentFacing === "user" ? "environment" : "user");
 btnReset.onclick = () => { 
-  poseHistory = []; gameScore = 0; scoreVal.innerText = "0"; 
+  gameScore = 0; scoreVal.innerText = "0"; 
   buildPoseDatabase(); // Listeyi yeniden karıştır
-  currentPoseIdx = 0; matchHoldFrames = 0; 
+  currentPoseIdx = 0; wallProgress = 0; 
 };
 
 init();
